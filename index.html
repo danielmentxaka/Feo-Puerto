@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Feo Puerto Live</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQqRkoM6QH9rG7+6h7sV5dGe1cn9k+4=" crossorigin="" />
+  <style>
+    :root { --bg:#081018; --card:#111c29; --line:#203448; --text:#eaf2ff; --muted:#91a4ba; --accent:#ffcc33; --water:#31b7ff; --shop:#ff9f2d; --done:#77ff91; }
+    html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    header { padding:12px 14px; display:flex; gap:12px; align-items:center; justify-content:space-between; background:#0b1520; border-bottom:1px solid var(--line); }
+    h1 { font-size:18px; margin:0; letter-spacing:.2px; }
+    #status { color:var(--muted); font-size:13px; text-align:right; }
+    #map { height:58vh; min-height:360px; background:#0d1825; }
+    .panel { padding:12px 14px; display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; box-shadow:0 8px 24px #0005; }
+    .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+    .value { font-size:24px; font-weight:800; margin-top:3px; }
+    #profileWrap { padding:0 14px 14px; }
+    #profile { width:100%; height:180px; background:#0d1825; border:1px solid var(--line); border-radius:14px; display:block; }
+    .waterIcon, .shopIcon, .meIcon { display:flex; align-items:center; justify-content:center; border-radius:50%; color:#06111b; font-weight:900; box-shadow:0 2px 8px #0008; }
+    .waterIcon { background:var(--water); width:26px; height:26px; }
+    .shopIcon { background:var(--shop); width:28px; height:28px; }
+    .meIcon { background:var(--accent); width:30px; height:30px; border:2px solid white; }
+    .warn { max-width:780px; margin:24px auto; padding:16px; border-radius:14px; background:#2a1d11; border:1px solid #7b5728; color:#ffdca8; }
+    a { color:#9ad2ff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Feo Puerto Live</h1>
+    <div id="status">Cargando...</div>
+  </header>
+  <div id="map"></div>
+  <section class="panel">
+    <div class="card"><div class="label">Ruta</div><div id="routeName" class="value">-</div></div>
+    <div class="card"><div class="label">Última posición</div><div id="lastUpdate" class="value">-</div></div>
+    <div class="card"><div class="label">Distancia GPX</div><div id="distance" class="value">-</div></div>
+    <div class="card"><div class="label">Ruta hecha desde Live</div><div id="actualDistance" class="value">-</div></div>
+    <div class="card"><div class="label">Velocidad</div><div id="speed" class="value">-</div></div>
+  </section>
+  <section id="profileWrap"><canvas id="profile" width="1200" height="180"></canvas></section>
+
+  <script src="config.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    const routeId = new URLSearchParams(location.search).get('id') || '';
+    const supabaseUrl = (window.FEO_SUPABASE_URL || '').replace(/\/$/, '');
+    const anonKey = window.FEO_SUPABASE_ANON_KEY || '';
+    const statusEl = document.getElementById('status');
+    const map = L.map('map', { zoomControl:true });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+    let trackLayer = null, actualLayer = null, meMarker = null, poiLayer = L.layerGroup().addTo(map), fitted = false;
+
+    function icon(cls, text) {
+      return L.divIcon({ className:'', html:`<div class="${cls}">${text}</div>`, iconSize:[30,30], iconAnchor:[15,15] });
+    }
+    function fmtAge(ms) {
+      if (!ms) return '-';
+      const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+      if (s < 60) return `hace ${s} s`;
+      const m = Math.round(s / 60);
+      if (m < 60) return `hace ${m} min`;
+      return `hace ${Math.round(m/60)} h`;
+    }
+    function fmtKm(m) { return Number.isFinite(m) ? (m/1000).toFixed(1).replace('.', ',') + ' km' : '-'; }
+    function fmtSpeed(v) { return Number.isFinite(v) ? v.toFixed(1).replace('.', ',') + ' km/h' : '-'; }
+
+    async function loadLive() {
+      if (!routeId) return showConfigError('Falta el parámetro ?id= en la URL.');
+      if (!supabaseUrl || !anonKey || supabaseUrl.includes('TU-PROYECTO') || anonKey.includes('PEGA_AQUI')) {
+        return showConfigError('Falta configurar web-github/config.js con SUPABASE_URL y ANON_KEY.');
+      }
+      try {
+        const url = `${supabaseUrl}/rest/v1/feo_live_sessions?select=payload,updated_at&id=eq.${encodeURIComponent(routeId)}`;
+        const res = await fetch(url, { headers:{ apikey:anonKey, Authorization:`Bearer ${anonKey}` }});
+        if (!res.ok) throw new Error('Supabase ' + res.status);
+        const rows = await res.json();
+        if (!rows.length) {
+          statusEl.textContent = 'Todavía no hay datos para esta ruta';
+          return;
+        }
+        render(rows[0].payload || {}, rows[0].updated_at);
+      } catch (e) {
+        statusEl.textContent = 'Error leyendo datos: ' + e.message;
+      }
+    }
+
+    function showConfigError(msg) {
+      document.body.innerHTML = `<div class="warn"><h2>Feo Puerto Live</h2><p>${msg}</p><p>Cuando configuremos Supabase y GitHub Pages, aquí saldrá el mapa con la posición.</p></div>`;
+    }
+
+    function render(data, updatedAt) {
+      const route = data.route || [];
+      const pois = data.pois || [];
+      document.getElementById('routeName').textContent = data.trackName || 'Ruta GPX';
+      document.getElementById('lastUpdate').textContent = fmtAge(data.timestamp || Date.parse(updatedAt));
+      document.getElementById('distance').textContent = fmtKm(data.distanceM);
+      document.getElementById('speed').textContent = fmtSpeed(data.speedKmh || (data.position && data.position.speedKmh));
+      document.getElementById('actualDistance').textContent = fmtKm(data.actualDistanceM);
+      statusEl.textContent = 'Actualizado ' + fmtAge(data.timestamp || Date.parse(updatedAt));
+
+      if (route.length) {
+        const latlngs = route.map(p => [p.lat, p.lon]);
+        if (!trackLayer) trackLayer = L.polyline(latlngs, { weight:5, opacity:.55, color:'#4fb0ff' }).addTo(map).bindPopup('Track GPX previsto');
+        else trackLayer.setLatLngs(latlngs);
+        if (!fitted) { map.fitBounds(trackLayer.getBounds(), { padding:[28,28] }); fitted = true; }
+      }
+      const actual = data.actualRoute || [];
+      if (actual.length) {
+        const realLatLngs = actual.map(p => [p.lat, p.lon]);
+        if (!actualLayer) actualLayer = L.polyline(realLatLngs, { weight:6, opacity:.95, color:'#77ff91' }).addTo(map).bindPopup('Ruta real desde Live ON');
+        else actualLayer.setLatLngs(realLatLngs);
+      }
+
+      poiLayer.clearLayers();
+      for (const p of pois) {
+        const isSuper = !!p.supermarket;
+        const mk = L.marker([p.lat, p.lon], { icon: icon(isSuper ? 'shopIcon' : 'waterIcon', isSuper ? 'S' : '💧') });
+        const name = p.name || (isSuper ? 'Supermercado' : 'Agua');
+        mk.bindPopup(`<b>${name}</b><br>Km ${(p.routeDistM/1000).toFixed(1)}<br>A ${Math.round(p.distanceToTrackM||0)} m del track`);
+        mk.addTo(poiLayer);
+      }
+
+      if (data.position && Number.isFinite(data.position.lat) && Number.isFinite(data.position.lon)) {
+        const ll = [data.position.lat, data.position.lon];
+        if (!meMarker) meMarker = L.marker(ll, { icon:icon('meIcon','●') }).addTo(map).bindPopup('Última posición');
+        else meMarker.setLatLng(ll);
+      }
+      drawProfile(route, pois, data.distanceM);
+    }
+
+    function drawProfile(route, pois, currentM) {
+      const c = document.getElementById('profile');
+      const ctx = c.getContext('2d');
+      const w = c.width, h = c.height;
+      ctx.clearRect(0,0,w,h);
+      ctx.fillStyle = '#0d1825'; ctx.fillRect(0,0,w,h);
+      if (!route.length) return;
+      const minEle = Math.min(...route.map(p => p.ele || 0));
+      const maxEle = Math.max(...route.map(p => p.ele || 0));
+      const total = route[route.length-1].distM || 1;
+      const pad = 14;
+      function x(d){ return pad + (w-pad*2) * (d/total); }
+      function y(e){ return h-pad - (h-pad*2) * ((e-minEle)/Math.max(1,maxEle-minEle)); }
+      ctx.strokeStyle = '#4fb0ff'; ctx.lineWidth = 3; ctx.beginPath();
+      route.forEach((p,i)=>{ const xx=x(p.distM||0), yy=y(p.ele||0); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); });
+      ctx.stroke();
+      for (const p of pois) {
+        const xx = x(p.routeDistM || 0);
+        ctx.beginPath();
+        ctx.fillStyle = p.supermarket ? '#ff9f2d' : '#31b7ff';
+        ctx.arc(xx, 26, 6, 0, Math.PI*2); ctx.fill();
+      }
+      if (Number.isFinite(currentM)) {
+        const xx = x(currentM);
+        ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(xx, 8); ctx.lineTo(xx, h-8); ctx.stroke();
+      }
+    }
+
+    loadLive();
+    setInterval(loadLive, 60000);
+  </script>
+</body>
+</html>
