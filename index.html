@@ -2,168 +2,281 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <title>Feo Puerto Live</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQqRkoM6QH9rG7+6h7sV5dGe1cn9k+4=" crossorigin="" />
   <style>
-    :root { --bg:#081018; --card:#111c29; --line:#203448; --text:#eaf2ff; --muted:#91a4ba; --accent:#ffcc33; --water:#31b7ff; --shop:#ff9f2d; --done:#77ff91; }
-    html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
-    header { padding:12px 14px; display:flex; gap:12px; align-items:center; justify-content:space-between; background:#0b1520; border-bottom:1px solid var(--line); }
-    h1 { font-size:18px; margin:0; letter-spacing:.2px; }
-    #status { color:var(--muted); font-size:13px; text-align:right; }
-    #map { height:58vh; min-height:360px; background:#0d1825; }
-    .panel { padding:12px 14px; display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); }
-    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; box-shadow:0 8px 24px #0005; }
-    .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
-    .value { font-size:24px; font-weight:800; margin-top:3px; }
-    #profileWrap { padding:0 14px 14px; }
-    #profile { width:100%; height:180px; background:#0d1825; border:1px solid var(--line); border-radius:14px; display:block; }
+    :root { --bg:#071019; --card:#101c29; --line:#203447; --text:#edf5ff; --muted:#8fa5bb; --accent:#ffcc33; --track:#4fb0ff; --real:#74ff91; --water:#31b7ff; --shop:#ff9f2d; --bad:#ffdca8; }
+    * { box-sizing:border-box; }
+    html, body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    body { height:100dvh; display:flex; flex-direction:column; }
+    #mapWrap { height:60dvh; min-height:260px; position:relative; border-bottom:1px solid var(--line); background:#0c1723; }
+    #map { height:100%; width:100%; background:#0c1723; }
+    #status { position:absolute; z-index:500; top:10px; left:10px; right:10px; display:flex; justify-content:space-between; gap:8px; pointer-events:none; }
+    .pill { background:#071019e6; border:1px solid var(--line); color:var(--text); border-radius:999px; padding:7px 11px; box-shadow:0 6px 20px #0008; font-weight:800; font-size:13px; }
+    .pill.muted { color:var(--muted); font-weight:700; text-align:right; }
+    #profileWrap { height:20dvh; min-height:120px; padding:8px 10px; background:#08131f; border-bottom:1px solid var(--line); }
+    #profile { width:100%; height:100%; display:block; border:1px solid var(--line); border-radius:13px; background:#0c1723; }
+    #dataPanel { height:20dvh; min-height:132px; padding:8px 10px 10px; display:grid; grid-template-columns:repeat(4,1fr); gap:8px; overflow:auto; background:#071019; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 9px; min-width:0; }
+    .label { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.07em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .value { font-size:18px; font-weight:900; margin-top:2px; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .waterIcon, .shopIcon, .meIcon { display:flex; align-items:center; justify-content:center; border-radius:50%; color:#06111b; font-weight:900; box-shadow:0 2px 8px #0008; }
-    .waterIcon { background:var(--water); width:26px; height:26px; }
-    .shopIcon { background:var(--shop); width:28px; height:28px; }
+    .waterIcon { background:var(--water); width:24px; height:24px; font-size:15px; }
+    .shopIcon { background:var(--shop); width:25px; height:25px; font-size:14px; }
     .meIcon { background:var(--accent); width:30px; height:30px; border:2px solid white; }
-    .warn { max-width:780px; margin:24px auto; padding:16px; border-radius:14px; background:#2a1d11; border:1px solid #7b5728; color:#ffdca8; }
-    a { color:#9ad2ff; }
+    .warn { max-width:780px; margin:24px auto; padding:16px; border-radius:14px; background:#2a1d11; border:1px solid #7b5728; color:var(--bad); }
+    @media (max-width:700px) { #dataPanel { grid-template-columns:repeat(2,1fr); } .value { font-size:16px; } }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Feo Puerto Live</h1>
-    <div id="status">Cargando...</div>
-  </header>
-  <div id="map"></div>
-  <section class="panel">
-    <div class="card"><div class="label">Ruta</div><div id="routeName" class="value">-</div></div>
-    <div class="card"><div class="label">Última posición</div><div id="lastUpdate" class="value">-</div></div>
-    <div class="card"><div class="label">Distancia GPX</div><div id="distance" class="value">-</div></div>
-    <div class="card"><div class="label">Ruta hecha desde Live</div><div id="actualDistance" class="value">-</div></div>
-    <div class="card"><div class="label">Velocidad</div><div id="speed" class="value">-</div></div>
+  <section id="mapWrap">
+    <div id="map"></div>
+    <div id="status"><div class="pill">Feo Puerto Live</div><div id="statusText" class="pill muted">Cargando...</div></div>
   </section>
-  <section id="profileWrap"><canvas id="profile" width="1200" height="180"></canvas></section>
+  <section id="profileWrap"><canvas id="profile" width="1200" height="240"></canvas></section>
+  <section id="dataPanel">
+    <div class="card"><div class="label">Distancia total</div><div id="totalDist" class="value">-</div></div>
+    <div class="card"><div class="label">Recorrida</div><div id="doneDist" class="value">-</div></div>
+    <div class="card"><div class="label">Por recorrer</div><div id="leftDist" class="value">-</div></div>
+    <div class="card"><div class="label">Última posición</div><div id="lastUpdate" class="value">-</div></div>
+    <div class="card"><div class="label">Velocidad actual</div><div id="speedNow" class="value">-</div></div>
+    <div class="card"><div class="label">Velocidad media</div><div id="speedAvg" class="value">-</div></div>
+    <div class="card"><div class="label">D+ total</div><div id="gainTotal" class="value">-</div></div>
+    <div class="card"><div class="label">D+ hecho / restante</div><div id="gainDoneLeft" class="value">-</div></div>
+  </section>
 
   <script src="config.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    const routeId = new URLSearchParams(location.search).get('id') || '';
+    const routeId = new URLSearchParams(location.search).get('id') || 'daniel-live';
     const supabaseUrl = (window.FEO_SUPABASE_URL || '').replace(/\/$/, '');
     const anonKey = window.FEO_SUPABASE_ANON_KEY || '';
-    const statusEl = document.getElementById('status');
-    const map = L.map('map', { zoomControl:true });
+    const statusText = document.getElementById('statusText');
+    const map = L.map('map', {
+      zoomControl:true,
+      preferCanvas:true,
+      zoomSnap:0.25,
+      zoomDelta:0.5,
+      wheelPxPerZoomLevel:120,
+      wheelDebounceTime:80,
+      inertia:true,
+      inertiaDeceleration:2500,
+      maxBoundsViscosity:0.45
+    });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      updateWhenIdle:true,
+      keepBuffer:2,
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
-    let trackLayer = null, actualLayer = null, meMarker = null, poiLayer = L.layerGroup().addTo(map), fitted = false;
+    let trackLayer = null, actualLayer = null, meMarker = null, poiLayer = L.layerGroup().addTo(map), fitted = false, lastFitMode = '';
 
-    function icon(cls, text) {
-      return L.divIcon({ className:'', html:`<div class="${cls}">${text}</div>`, iconSize:[30,30], iconAnchor:[15,15] });
-    }
-    function fmtAge(ms) {
-      if (!ms) return '-';
-      const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
-      if (s < 60) return `hace ${s} s`;
-      const m = Math.round(s / 60);
-      if (m < 60) return `hace ${m} min`;
-      return `hace ${Math.round(m/60)} h`;
-    }
+    function icon(cls, text) { return L.divIcon({ className:'', html:`<div class="${cls}">${text}</div>`, iconSize:[30,30], iconAnchor:[15,15] }); }
+    function fmtAge(ms) { if (!ms) return '-'; const s=Math.max(0,Math.round((Date.now()-ms)/1000)); if(s<60)return `${s}s`; const m=Math.round(s/60); if(m<60)return `${m}min`; return `${Math.round(m/60)}h`; }
     function fmtKm(m) { return Number.isFinite(m) ? (m/1000).toFixed(1).replace('.', ',') + ' km' : '-'; }
+    function fmtM(m) { return Number.isFinite(m) ? Math.round(m) + ' m' : '-'; }
     function fmtSpeed(v) { return Number.isFinite(v) ? v.toFixed(1).replace('.', ',') + ' km/h' : '-'; }
+    function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
+
+    async function api(path) {
+      const res = await fetch(`${supabaseUrl}/rest/v1/${path}`, { headers:{ apikey:anonKey, Authorization:`Bearer ${anonKey}` }});
+      if (!res.ok) throw new Error('Supabase ' + res.status);
+      return await res.json();
+    }
 
     async function loadLive() {
-      if (!routeId) return showConfigError('Falta el parámetro ?id= en la URL.');
-      if (!supabaseUrl || !anonKey || supabaseUrl.includes('TU-PROYECTO') || anonKey.includes('PEGA_AQUI')) {
-        return showConfigError('Falta configurar web-github/config.js con SUPABASE_URL y ANON_KEY.');
-      }
+      if (!supabaseUrl || !anonKey) return showConfigError('Falta configurar config.js.');
       try {
-        const url = `${supabaseUrl}/rest/v1/feo_live_sessions?select=payload,updated_at&id=eq.${encodeURIComponent(routeId)}`;
-        const res = await fetch(url, { headers:{ apikey:anonKey, Authorization:`Bearer ${anonKey}` }});
-        if (!res.ok) throw new Error('Supabase ' + res.status);
-        const rows = await res.json();
-        if (!rows.length) {
-          statusEl.textContent = 'Todavía no hay datos para esta ruta';
+        const sessions = await api(`feo_live_sessions?select=payload,updated_at&id=eq.${encodeURIComponent(routeId)}`);
+        if (!sessions.length) {
+          statusText.textContent = 'Live apagado o sin datos todavía';
+          render({}, [], null);
           return;
         }
-        render(rows[0].payload || {}, rows[0].updated_at);
-      } catch (e) {
-        statusEl.textContent = 'Error leyendo datos: ' + e.message;
-      }
+        const session = (sessions[0] && sessions[0].payload) || {};
+        const startMs = Number.isFinite(session.sessionStartedAtMs) ? session.sessionStartedAtMs : (session.timestamp || Date.parse(sessions[0].updated_at));
+        let pointsPath = `feo_live_points?select=lat,lon,ele,speed_kmh,accuracy_m,actual_distance_m,time_ms&session_id=eq.${encodeURIComponent(routeId)}&order=time_ms.asc&limit=5000`;
+        if (Number.isFinite(startMs)) pointsPath += `&time_ms=gte.${Math.floor(startMs)}`;
+        const points = await api(pointsPath);
+        render(session, points || [], sessions[0] && sessions[0].updated_at);
+      } catch (e) { statusText.textContent = 'Error: ' + e.message; }
     }
 
-    function showConfigError(msg) {
-      document.body.innerHTML = `<div class="warn"><h2>Feo Puerto Live</h2><p>${msg}</p><p>Cuando configuremos Supabase y GitHub Pages, aquí saldrá el mapa con la posición.</p></div>`;
+    function showConfigError(msg) { document.body.innerHTML = `<div class="warn"><h2>Feo Puerto Live</h2><p>${msg}</p><p>Dirección fija: esta página mostrará la última ruta cuando actives Live en Feo Puerto.</p></div>`; }
+
+    function render(session, points, updatedAt) {
+      const route = Array.isArray(session.route) ? session.route.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon)) : [];
+      const pois = Array.isArray(session.pois) ? session.pois : [];
+      const latestPoint = points.length ? points[points.length - 1] : normalizePosition(session.position);
+      const actual = points.map(p => ({lat:p.lat, lon:p.lon, ele:p.ele, time:p.time_ms, speedKmh:p.speed_kmh, actualDistanceM:p.actual_distance_m})).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+      const totalM = getTotalDistance(route, session.summary);
+      const currentM = route.length && latestPoint ? nearestRouteDistance(route, latestPoint.lat, latestPoint.lon) : latestPoint && Number.isFinite(latestPoint.actualDistanceM) ? latestPoint.actualDistanceM : session.distanceM;
+      const doneM = Number.isFinite(currentM) ? clamp(currentM, 0, totalM || currentM) : NaN;
+      const leftM = Number.isFinite(totalM) && Number.isFinite(doneM) ? Math.max(0, totalM - doneM) : NaN;
+      const gain = computeGain(route, doneM, session.summary);
+      const elapsedH = elapsedHours(actual, session.sessionStartedAtMs || session.timestamp);
+      const avgKmh = elapsedH > 0 && Number.isFinite(doneM) ? (doneM / 1000) / elapsedH : NaN;
+      const latestMs = latestPoint && latestPoint.time ? latestPoint.time : (session.timestamp || Date.parse(updatedAt));
+
+      document.getElementById('totalDist').textContent = fmtKm(totalM);
+      document.getElementById('doneDist').textContent = fmtKm(doneM);
+      document.getElementById('leftDist').textContent = fmtKm(leftM);
+      document.getElementById('lastUpdate').textContent = fmtAge(latestMs);
+      document.getElementById('speedNow').textContent = fmtSpeed(latestPoint && latestPoint.speedKmh);
+      document.getElementById('speedAvg').textContent = fmtSpeed(avgKmh);
+      document.getElementById('gainTotal').textContent = fmtM(gain.total);
+      document.getElementById('gainDoneLeft').textContent = `${fmtM(gain.done)} / ${fmtM(gain.left)}`;
+      statusText.textContent = `Actualizado ${fmtAge(latestMs)}`;
+
+      drawMap(route, pois, actual, latestPoint);
+      drawProfile(route, pois, doneM, gain);
     }
 
-    function render(data, updatedAt) {
-      const route = data.route || [];
-      const pois = data.pois || [];
-      document.getElementById('routeName').textContent = data.trackName || 'Ruta GPX';
-      document.getElementById('lastUpdate').textContent = fmtAge(data.timestamp || Date.parse(updatedAt));
-      document.getElementById('distance').textContent = fmtKm(data.distanceM);
-      document.getElementById('speed').textContent = fmtSpeed(data.speedKmh || (data.position && data.position.speedKmh));
-      document.getElementById('actualDistance').textContent = fmtKm(data.actualDistanceM);
-      statusEl.textContent = 'Actualizado ' + fmtAge(data.timestamp || Date.parse(updatedAt));
+    function normalizePosition(pos) {
+      if (!pos || !Number.isFinite(pos.lat) || !Number.isFinite(pos.lon)) return null;
+      return { lat:pos.lat, lon:pos.lon, ele:pos.ele, time:pos.time, speedKmh:pos.speedKmh, actualDistanceM:pos.actualDistanceM };
+    }
 
+    function getTotalDistance(route, summary) {
+      if (summary && Number.isFinite(summary.distanceM) && summary.distanceM > 0) return summary.distanceM;
+      if (route.length && Number.isFinite(route[route.length-1].distM)) return route[route.length-1].distM;
+      return NaN;
+    }
+
+    function drawMap(route, pois, actual, latestPoint) {
       if (route.length) {
         const latlngs = route.map(p => [p.lat, p.lon]);
-        if (!trackLayer) trackLayer = L.polyline(latlngs, { weight:5, opacity:.55, color:'#4fb0ff' }).addTo(map).bindPopup('Track GPX previsto');
+        if (!trackLayer) trackLayer = L.polyline(latlngs, { weight:4, opacity:.75, color:'#4fb0ff', smoothFactor:1.8 }).addTo(map).bindPopup('Track GPX previsto');
         else trackLayer.setLatLngs(latlngs);
-        if (!fitted) { map.fitBounds(trackLayer.getBounds(), { padding:[28,28] }); fitted = true; }
+        if (!fitted || lastFitMode !== 'route') {
+          const b = trackLayer.getBounds();
+          map.fitBounds(b.pad(0.04), { padding:[18,18], animate:false });
+          map.setMaxBounds(b.pad(0.18));
+          map.setMinZoom(map.getZoom());
+          fitted = true; lastFitMode = 'route';
+        }
       }
-      const actual = data.actualRoute || [];
       if (actual.length) {
         const realLatLngs = actual.map(p => [p.lat, p.lon]);
-        if (!actualLayer) actualLayer = L.polyline(realLatLngs, { weight:6, opacity:.95, color:'#77ff91' }).addTo(map).bindPopup('Ruta real desde Live ON');
+        if (!actualLayer) actualLayer = L.polyline(realLatLngs, { weight:5, opacity:.95, color:'#74ff91', smoothFactor:1.4 }).addTo(map).bindPopup('Ruta real desde Live ON');
         else actualLayer.setLatLngs(realLatLngs);
       }
-
       poiLayer.clearLayers();
       for (const p of pois) {
+        if (!Number.isFinite(p.lat) || !Number.isFinite(p.lon)) continue;
         const isSuper = !!p.supermarket;
         const mk = L.marker([p.lat, p.lon], { icon: icon(isSuper ? 'shopIcon' : 'waterIcon', isSuper ? 'S' : '💧') });
         const name = p.name || (isSuper ? 'Supermercado' : 'Agua');
-        mk.bindPopup(`<b>${name}</b><br>Km ${(p.routeDistM/1000).toFixed(1)}<br>A ${Math.round(p.distanceToTrackM||0)} m del track`);
+        mk.bindPopup(`<b>${name}</b><br>Km ${Number.isFinite(p.routeDistM) ? (p.routeDistM/1000).toFixed(1) : '-'}`);
         mk.addTo(poiLayer);
       }
-
-      if (data.position && Number.isFinite(data.position.lat) && Number.isFinite(data.position.lon)) {
-        const ll = [data.position.lat, data.position.lon];
+      if (latestPoint) {
+        const ll = [latestPoint.lat, latestPoint.lon];
         if (!meMarker) meMarker = L.marker(ll, { icon:icon('meIcon','●') }).addTo(map).bindPopup('Última posición');
         else meMarker.setLatLng(ll);
+        if (!route.length && (!fitted || lastFitMode !== 'point')) {
+          const b = boundsAround(latestPoint.lat, latestPoint.lon, 50000);
+          map.fitBounds(b, { padding:[18,18], animate:false });
+          map.setMaxBounds(b.pad(0.05));
+          map.setMinZoom(map.getZoom());
+          fitted = true; lastFitMode = 'point';
+        }
       }
-      drawProfile(route, pois, data.distanceM);
+    }
+
+    function boundsAround(lat, lon, meters) {
+      const dLat = meters / 111320;
+      const dLon = meters / (111320 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+      return L.latLngBounds([lat-dLat, lon-dLon], [lat+dLat, lon+dLon]);
+    }
+
+    function elapsedHours(actual, sessionTimestamp) {
+      let start = NaN, end = NaN;
+      if (actual.length >= 2) { start = actual[0].time; end = actual[actual.length-1].time; }
+      else if (sessionTimestamp && actual.length === 1) { start = sessionTimestamp; end = actual[0].time; }
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return NaN;
+      return (end - start) / 3600000;
+    }
+
+    function nearestRouteDistance(route, lat, lon) {
+      let bestD = Infinity, bestM = NaN;
+      for (const p of route) {
+        const d = haversine(lat, lon, p.lat, p.lon);
+        if (d < bestD) { bestD = d; bestM = p.distM; }
+      }
+      return bestM;
+    }
+
+    function haversine(a,b,c,d) {
+      const R=6371000, toRad=x=>x*Math.PI/180;
+      const dLat=toRad(c-a), dLon=toRad(d-b);
+      const s=Math.sin(dLat/2)**2 + Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dLon/2)**2;
+      return 2*R*Math.asin(Math.sqrt(s));
+    }
+
+    function computeGain(route, currentM, summary) {
+      let total = summary && Number.isFinite(summary.gainM) ? summary.gainM : NaN;
+      let done = 0;
+      if (route.length) {
+        let calcTotal = 0;
+        for (let i=1; i<route.length; i++) {
+          const inc = Math.max(0, (route[i].ele||0) - (route[i-1].ele||0));
+          calcTotal += inc;
+          if (Number.isFinite(currentM) && (route[i].distM||0) <= currentM) done += inc;
+        }
+        if (!Number.isFinite(total) || total <= 0) total = calcTotal;
+        if (Number.isFinite(currentM) && currentM > 0 && currentM < getTotalDistance(route, summary)) {
+          const ratio = calcTotal > 0 ? done / calcTotal : currentM / getTotalDistance(route, summary);
+          if (summary && Number.isFinite(summary.gainM) && calcTotal > 0) done = summary.gainM * ratio;
+        } else if (Number.isFinite(currentM) && currentM >= getTotalDistance(route, summary)) done = total;
+      }
+      const left = Number.isFinite(total) && Number.isFinite(done) ? Math.max(0, total - done) : NaN;
+      return { total, done, left };
     }
 
     function drawProfile(route, pois, currentM) {
       const c = document.getElementById('profile');
+      const ratio = Math.max(1, window.devicePixelRatio || 1);
+      const rect = c.getBoundingClientRect();
+      c.width = Math.round(rect.width * ratio); c.height = Math.round(rect.height * ratio);
       const ctx = c.getContext('2d');
-      const w = c.width, h = c.height;
-      ctx.clearRect(0,0,w,h);
-      ctx.fillStyle = '#0d1825'; ctx.fillRect(0,0,w,h);
-      if (!route.length) return;
-      const minEle = Math.min(...route.map(p => p.ele || 0));
-      const maxEle = Math.max(...route.map(p => p.ele || 0));
+      ctx.scale(ratio, ratio);
+      const w = rect.width, h = rect.height;
+      ctx.clearRect(0,0,w,h); ctx.fillStyle = '#0c1723'; ctx.fillRect(0,0,w,h);
+      if (!route.length) { ctx.fillStyle = '#8fa5bb'; ctx.font='14px system-ui'; ctx.fillText('Sin perfil de track', 16, 30); return; }
+      const minEle = Math.min(...route.map(p => Number.isFinite(p.ele) ? p.ele : 0));
+      const maxEle = Math.max(...route.map(p => Number.isFinite(p.ele) ? p.ele : 0));
       const total = route[route.length-1].distM || 1;
-      const pad = 14;
-      function x(d){ return pad + (w-pad*2) * (d/total); }
-      function y(e){ return h-pad - (h-pad*2) * ((e-minEle)/Math.max(1,maxEle-minEle)); }
-      ctx.strokeStyle = '#4fb0ff'; ctx.lineWidth = 3; ctx.beginPath();
-      route.forEach((p,i)=>{ const xx=x(p.distM||0), yy=y(p.ele||0); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); });
-      ctx.stroke();
-      for (const p of pois) {
-        const xx = x(p.routeDistM || 0);
-        ctx.beginPath();
-        ctx.fillStyle = p.supermarket ? '#ff9f2d' : '#31b7ff';
-        ctx.arc(xx, 26, 6, 0, Math.PI*2); ctx.fill();
-      }
+      const padL=12, padR=12, padT=12, padB=18;
+      const x=d=>padL+(w-padL-padR)*(d/total);
+      const y=e=>h-padB-(h-padT-padB)*((e-minEle)/Math.max(1,maxEle-minEle));
+      ctx.beginPath(); ctx.moveTo(x(route[0].distM||0), h-padB);
+      route.forEach(p=>ctx.lineTo(x(p.distM||0), y(p.ele||0)));
+      ctx.lineTo(x(total), h-padB); ctx.closePath(); ctx.fillStyle='rgba(79,176,255,.18)'; ctx.fill();
+      ctx.strokeStyle='#4fb0ff'; ctx.lineWidth=2.4; ctx.beginPath();
+      route.forEach((p,i)=>{ const xx=x(p.distM||0), yy=y(p.ele||0); if(i===0)ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }); ctx.stroke();
+      for (const p of pois) { if (!Number.isFinite(p.routeDistM)) continue; ctx.beginPath(); ctx.fillStyle=p.supermarket?'#ff9f2d':'#31b7ff'; ctx.arc(x(p.routeDistM), 19, 5, 0, Math.PI*2); ctx.fill(); }
       if (Number.isFinite(currentM)) {
-        const xx = x(currentM);
-        ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(xx, 8); ctx.lineTo(xx, h-8); ctx.stroke();
+        const cm=clamp(currentM,0,total); const xx=x(cm); let py=y(interpEle(route, cm));
+        ctx.strokeStyle='#ffcc33'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(xx, 8); ctx.lineTo(xx, h-10); ctx.stroke();
+        ctx.fillStyle='#ffcc33'; ctx.beginPath(); ctx.arc(xx, py, 7, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle='#ffffff'; ctx.lineWidth=2; ctx.stroke();
       }
+    }
+    function interpEle(route, dist) {
+      if (!route.length) return 0;
+      for (let i=1; i<route.length; i++) {
+        if ((route[i].distM||0) >= dist) {
+          const a=route[i-1], b=route[i]; const span=Math.max(1,(b.distM||0)-(a.distM||0)); const t=(dist-(a.distM||0))/span; return (a.ele||0)+((b.ele||0)-(a.ele||0))*t;
+        }
+      }
+      return route[route.length-1].ele||0;
     }
 
     loadLive();
     setInterval(loadLive, 60000);
+    window.addEventListener('resize', () => setTimeout(loadLive, 150));
   </script>
 </body>
 </html>
